@@ -3,9 +3,11 @@ import numpy as np
 import scipy as sp
 
 import sys
-sys.path.append("/mnt/c/Users/vmangr/Documents/Code/sydr/")
+sys.path.append("/mnt/d/Projects/Navigation/MyCode/sydr")
 from sydr.signal.gnsssignal import GenerateGPSGoldCode
 from sydr.utils.constants import GPS_L1CA_CODE_FREQ
+
+import axcoperations as axc
 
 # =============================================================================
 
@@ -82,5 +84,11 @@ def correlate(signal_1, signal_2, method='scipy', normalize=False):
         case 'scipy':
             corr = sp.signal.correlate(signal_1, signal_2, mode='full')
             lags = sp.signal.correlation_lags(len(signal_1), len(signal_2), mode="full")
+        
+        case 'axc':
+            corr, lags = axc.correlation(signal_1, signal_2)
 
     return corr, lags
+
+# =============================================================================
+
