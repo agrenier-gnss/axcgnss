@@ -92,3 +92,22 @@ def correlate(signal_1, signal_2, method='scipy', normalize=False):
 
 # =============================================================================
 
+def getPostCorrelationSNR(correlation, samplingFrequency):
+
+    samplesPerChip = round(samplingFrequency / GPS_L1CA_CODE_FREQ)
+
+    # Get the max peak
+    peak = np.max(correlation)**2
+    maxPeakIdx = np.argmax(np.abs(correlation))
+
+    # Get the mean outside the peak
+    mask = np.ones(len(correlation), dtype=bool)
+    mask[:maxPeakIdx-2*samplesPerChip] = False
+    mask[maxPeakIdx+2*samplesPerChip:] = False
+    noise = np.mean(np.abs(correlation[mask])**2)
+
+    # Compute SNR
+    snr = getPowerdB((peak - noise) / noise)
+
+    return snr
+
