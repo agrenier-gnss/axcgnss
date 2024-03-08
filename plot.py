@@ -57,12 +57,14 @@ def plotCorrelation(correlations, sampling_frequency, code_frequency, title):
     ax_small = fig.add_subplot(spec[idx:, 2:])
     for name, corr in correlations.items():
         corr_values, corr_lags = corr
-        ax_large.plot(corr_lags/samplesPerChip, corr_values / np.max(corr_values), color=COLORS[idx], label=name)
-        ax_large.set_xlim(-lim_corr_large, lim_corr_large)
+        #ax_large.plot(corr_lags/samplesPerChip, corr_values / np.max(corr_values), color=COLORS[idx], label=name)
+        ax_large.plot(corr_lags/samplesPerChip, corr_values, color=COLORS[idx], label=name)
+        #ax_large.set_xlim(-lim_corr_large, lim_corr_large)
         ax_large.set_title("Correlation")
         ax_large.set_xlabel('Chips')
 
-        ax_small.plot(corr_lags/samplesPerChip, corr_values / np.max(corr_values), color=COLORS[idx], label=name)
+        #ax_small.plot(corr_lags/samplesPerChip, corr_values / np.max(corr_values), color=COLORS[idx], label=name)
+        ax_small.plot(corr_lags/samplesPerChip, corr_values, color=COLORS[idx], label=name)
         ax_small.set_xlim(-lim_corr_small, lim_corr_small)
         ax_small.set_xlabel('Chips')
 

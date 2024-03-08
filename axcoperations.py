@@ -41,9 +41,12 @@ def lcadd(value1, value2, N):
 
 # =============================================================================
 
-def correlation(array1, array2):
+def correlation(array1, array2, axc_mult=None):
 
     N = len(array1)
+
+    if axc_mult==None:
+        axc_mult = mult
 
     corr = np.zeros(2*N-1)
     lags = np.zeros(2*N-1)
@@ -53,7 +56,7 @@ def correlation(array1, array2):
         for i in range(0, N):
             j = i + lag
             if j >= 0 and j < N:
-                correlation = add(correlation, mult(array1[j], array2[i]))
+                correlation += axc_mult(array1[j], array2[i])
         corr[idx] = correlation
         lags[idx] = lag
         idx += 1
