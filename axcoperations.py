@@ -1,5 +1,6 @@
 
 import numpy as np
+import scipy as sp
 
 # =============================================================================
 
@@ -41,12 +42,14 @@ def lcadd(value1, value2, N):
 
 # =============================================================================
 
-def correlation(array1, array2, axc_mult=None):
+def correlate(array1, array2, axc_mult=None):
 
     N = len(array1)
 
     if axc_mult==None:
-        axc_mult = mult
+        corr = sp.signal.correlate(array1, array2, mode='full')
+        lags = sp.signal.correlation_lags(len(array1), len(array2), mode="full")
+        return corr, lags
 
     corr = np.zeros(2*N-1)
     lags = np.zeros(2*N-1)
@@ -57,59 +60,10 @@ def correlation(array1, array2, axc_mult=None):
             j = i + lag
             if j >= 0 and j < N:
                 correlation += axc_mult(array1[j], array2[i])
+                correlation -= 100
         corr[idx] = correlation
         lags[idx] = lag
         idx += 1
     
     return corr, lags
 
-# =============================================================================
-
-import evoapproxlib as eal
-import pandas
-
-if __name__ == "__main__":
-
-    # array1 = np.array([0,0,1,1,1,0,0])
-    # array2 = np.array([0,1,1,1,0,0,0])
-    
-    # corr, lags = correlation(array1, array2)
-
-    # print(corr, lags)
-
-    # print(np.correlate(array1, array2, 'full'))
-
-    # axc_bits = 2 # Lower bits approximated
-    # bits = 4
-    # max_value = 2**bits // 2
-    # i_range = np.arange(-max_value, max_value-1, dtype=np.int16)
-    # j_range = np.arange(-max_value, max_value-1, dtype=np.int16)
-    # exact_results = np.zeros((2**bits, 2**bits))
-    # axc_results = np.zeros((2**bits, 2**bits))
-    # for i in i_range:
-    #     for j in j_range:
-    #         axc_results[i+max_value,j+max_value] = loadd(i, j, axc_bits)
-    #         exact_results[i+max_value,j+max_value] = i + j
-    
-    # plt.figure()
-    # plt.matshow(axc_results)
-    # plt.colorbar()
-    # plt.savefig('loadd.png')
-
-    MAE_PERCENT = 18.75
-    MAE = 805273600.0
-    WCE_PERCENT = 75.0
-    WCE = 3221094401.0
-    WCRE_PERCENT = 100.0
-    EP_PERCENT = 100.0
-    MRE_PERCENT = 87.99
-    MSE = 1.0407645e+18
-    PDK45_PWR = 0.0003
-    PDK45_AREA = 2.3
-    PDK45_DELAY = 0.04
-    
-    kpis = [MAE_PERCENT, MAE, WCE_PERCENT, WCE, WCRE_PERCENT, EP_PERCENT, 
-            MRE_PERCENT, MSE, PDK45_PWR, PDK45_AREA, PDK45_DELAY]
-    df = pandas.DataFrame()
-    for name, module in eal.multipliers['8x8_signed'].items():
-        print(f"{name} | {module.MAE:>6} | {module.WCE:>6} | {module.MSE:>9} | {module.PDK45_PWR:>9}")

@@ -42,7 +42,7 @@ def plotSignals(signals, sampling_frequency, code_frequency, title):
 
 # =============================================================================
 
-def plotCorrelation(correlations, sampling_frequency, code_frequency, title):
+def plotCorrelation(correlations, sampling_frequency, code_frequency, title, normalised=True):
 
     fig = plt.figure(figsize=(12, 4), layout="constrained")
     spec = fig.add_gridspec(1, 3)
@@ -64,8 +64,8 @@ def plotCorrelation(correlations, sampling_frequency, code_frequency, title):
         ax_large.set_xlabel('Chips')
 
         #ax_small.plot(corr_lags/samplesPerChip, corr_values / np.max(corr_values), color=COLORS[idx], label=name)
-        ax_small.plot(corr_lags/samplesPerChip, corr_values, color=COLORS[idx], label=name)
-        ax_small.set_xlim(-lim_corr_small, lim_corr_small)
+        ax_small.plot(corr_lags[4950:5050]/samplesPerChip, corr_values[4950:5050], color=COLORS[idx], label=name)
+        #ax_small.set_xlim(-lim_corr_small, lim_corr_small)
         ax_small.set_xlabel('Chips')
 
         idx += 1

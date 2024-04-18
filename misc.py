@@ -24,10 +24,7 @@ def getPowerLinear(value_dB):
 def generateGPSL1CA(prn=1, samplingFrequency=None):
     # Generate PRN code
     prn_code = GenerateGPSGoldCode(prn=prn, samplingFrequency=samplingFrequency)
-
-    # Generate doppler 
-    # TODO 
-
+    
     return prn_code
 
 # =============================================================================
@@ -57,38 +54,40 @@ def getSigmaFromCN0(signal_power_dB, cn0_target_dB, signal_bw):
 
 def quantize(signal, n_bits):
 
-    max_val = np.max(np.abs(signal))
+    # Old method
+    # max_val = np.max(np.abs(signal))
+    # num_levels = 2**n_bits 
+    # bins = np.linspace(-max_val, max_val, num_levels)
+    # centers = (bins[1:]+bins[:-1])/2
+    # signal_quantized = np.digitize(signal, centers) - (num_levels // 2) 
 
-    num_levels = 2**n_bits 
+    # Second method
+    scale_factor = (2**n_bits // 2) / np.max(np.abs(signal)) 
+    signal_quantized = np.round(signal * scale_factor - 0.5).astype(int)
 
-    bins = np.linspace(-max_val, max_val, num_levels)
-    centers = (bins[1:]+bins[:-1])/2
-
-    signal_quantized = np.digitize(signal, centers) - (num_levels // 2) 
-
-    return signal_quantized
+    return signal_quantized, scale_factor
 
 
 # =============================================================================
 
-def correlate(signal_1, signal_2, method='scipy', normalize=False):
+# def correlate(signal_1, signal_2, method='scipy', normalize=False):
 
-    # Normalization
-    # From https://stackoverflow.com/questions/53436231/normalized-cross-correlation-in-python
-    if normalize:
-        signal_1 = (signal_1 - np.mean(signal_1)) / (np.std(signal_1) * len(signal_1))
-        signal_2 = (signal_2 - np.mean(signal_2)) / (np.std(signal_2))
+#     # Normalization
+#     # From https://stackoverflow.com/questions/53436231/normalized-cross-correlation-in-python
+#     if normalize:
+#         signal_1 = (signal_1 - np.mean(signal_1)) / (np.std(signal_1) * len(signal_1))
+#         signal_2 = (signal_2 - np.mean(signal_2)) / (np.std(signal_2))
 
-    # Swith correlation method
-    match method:
-        case 'scipy':
-            corr = sp.signal.correlate(signal_1, signal_2, mode='full')
-            lags = sp.signal.correlation_lags(len(signal_1), len(signal_2), mode="full")
+#     # Swith correlation method
+#     match method:
+#         case 'scipy':
+#             corr = sp.signal.correlate(signal_1, signal_2, mode='full')
+#             lags = sp.signal.correlation_lags(len(signal_1), len(signal_2), mode="full")
         
-        case 'axc':
-            corr, lags = axc.correlation(signal_1, signal_2)
+#         case 'axc':
+#             corr, lags = axc.correlation(signal_1, signal_2)
 
-    return corr, lags
+#     return corr, lags
 
 # =============================================================================
 
