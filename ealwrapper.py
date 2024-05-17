@@ -38,7 +38,7 @@ def plotKPI(df, kpi_x, kpi_y, log_x=False, log_y=False):
     # Add module names
     text = [ax.annotate(txt, (df['MAE_PERCENT'][i], df['PDK45_PWR'][i])) for i, txt in enumerate(df['NAME'])]
 
-    adjust_text(text)
+    # adjust_text(text)
 
     _ = plt.xticks(rotation=45)
     plt.grid()

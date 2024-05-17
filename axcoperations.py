@@ -42,7 +42,7 @@ def lcadd(value1, value2, N):
 
 # =============================================================================
 
-def correlate(array1, array2, axc_mult=None):
+def FullCorrelation(array1, array2, axc_mult=None, axc_corr=0):
 
     N = len(array1)
 
@@ -59,11 +59,32 @@ def correlate(array1, array2, axc_mult=None):
         for i in range(0, N):
             j = i + lag
             if j >= 0 and j < N:
-                correlation += axc_mult(array1[j], array2[i])
-                correlation -= 100
+                correlation += axc_mult(array1[j], array2[i]) + axc_corr
         corr[idx] = correlation
         lags[idx] = lag
         idx += 1
     
+    return corr, lags
+
+
+def PartialCorrelation(array1, replicas, axc_mult=None, axc_corr=0):
+
+    N = len(array1)
+
+    corr = np.zeros(len(replicas.keys()))
+    lags = np.zeros(len(replicas.keys()))
+    idx = 0
+    for delay, array2 in replicas.items():
+        if axc_mult==None:
+            corr[idx] = np.sum(array1 * array2)
+            lags[idx] = delay
+        else:
+            correlation = 0
+            for i in range(0, N):
+                correlation += axc_mult(array1[i], array2[i]) + axc_corr
+            corr[idx] = correlation
+            lags[idx] = delay
+        idx += 1
+
     return corr, lags
 

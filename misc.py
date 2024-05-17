@@ -110,3 +110,15 @@ def getPostCorrelationSNR(correlation, samplingFrequency):
 
     return snr
 
+def GenerateDelayedReplicas(signal, correlator_delays, code_step):
+
+    # codeStep = GPS_L1CA_CODE_FREQ / self.rfSignal.samplingFrequency
+    nb_samples = len(signal)
+    replicas = {}
+    for delay in correlator_delays: 
+        _delay = delay/10
+        codeIdx = np.ceil(np.linspace(_delay, code_step * nb_samples + _delay, nb_samples, endpoint=False)).astype(int)
+        replicas[delay] = signal[codeIdx] 
+
+    return replicas
+
