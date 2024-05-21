@@ -1,18 +1,19 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import pickle
+import multiprocessing
+import time
+
 import axcgnss as axg
 
-import matplotlib.pyplot as plt
+# ======================================================================================================================
 
-import pickle
+def worker(run, prn, signal, replicas, cn0_target_dB, sampling_frequency, quantization_bits, custom_multipliers):
 
-# =================================================================================================
-# Signal parameters
-prn = 1
-signal_prn = axg.GenerateGPSGoldCode(prn=prn)
-correlator_delays = range(-200, 250, 1) # in deca chip, chip * 10
+    signal_bw = axg.GPS_L1CA_CODE_FREQ # Bandwidth of the signal for CN0 to SNR computation
 
-# =================================================================================================
-
-def worker(signal, replicas, cn0_target_dB, sigma_noise, sampling_frequency, quantization_bits, custom_multipliers):
+    # Get noise from target CN0
+    sigma_noise = axg.getSigmaFromCN0(signal_power_dB=0, cn0_target_dB=cn0_target_dB, signal_bw=signal_bw)
 
     # Noisy signal
     signal_noisy = axg.addWhiteNoise(signal, sigma=sigma_noise)
@@ -29,7 +30,8 @@ def worker(signal, replicas, cn0_target_dB, sigma_noise, sampling_frequency, qua
         "sigma_noise"          : sigma_noise,
         "signal_noisy"         : signal_noisy,
         "signal_quantized"     : signal_quantized,
-        "scale_factor"         : scale_factor
+        "scale_factor"         : scale_factor,
+        "run"                  : run
     }
 
     # Perform exact correlations
@@ -46,64 +48,95 @@ def worker(signal, replicas, cn0_target_dB, sigma_noise, sampling_frequency, qua
                 axc_mult=axc_mult, 
                 axc_corr=0
             )
+        
+    print(f"Run done ({sampling_frequency:>12.1f} Hz, {quantization_bits:>2d} bits, {cn0_target_dB:>2d} dB, run {run:>4d})")
 
     return results
 
+# ----------------------------------------------------------------------------------------------------------------------
+
+def test_worker():
+
+    sigma_noise = axg.getSigmaFromCN0(signal_power_dB=0, cn0_target_dB=60, signal_bw=axg.GPS_L1CA_CODE_FREQ)
+    signal = axg.UpsampleCode(signal_prn, 10e6)
+    replicas = axg.GenerateDelayedReplicas(signal, correlator_delays)
+    all_results = worker(signal, replicas, 60, sigma_noise, 10e6, 8, axg.EAL_MULTIPLIERS_8BIT_SIGNED)
+    
+    # Save results
+    with open('all_results.pkl', 'wb') as handle:
+        pickle.dump(all_results, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+    # Read results 
+    with open('all_results.pkl', 'rb') as handle:
+        all_results = pickle.load(handle)
+
+    plt.figure()
+    plt.plot(all_results['corr_lags'], all_results['noisy_corr'])
+    plt.plot(all_results['corr_lags'], all_results['quantized_corr'])
+    plt.plot(all_results['corr_lags'], all_results['axc_corr_mul8s_1L12'])
+    plt.xlim((-20, 20))
+    plt.grid()
+    plt.savefig('test.png')
+
+    return 
+
+# ======================================================================================================================
+
 if __name__ == "__main__":
 
-    # Parameters
-    # sf_list = [2, 4, 8, 16, 20] * axg.GPS_L1CA_CODE_FREQ
-    # cn0_list = range(30, 60, 5)
-    # bits_list = [8, 16]
-    # nb_run = 100 # Number Monte Carlo run per subset of parameter
-    # signal_bw = axg.GPS_L1CA_CODE_FREQ # Bandwidth of the signal for CN0 to SNR computation
-
+    # ==================================================================================================================
     # Testing worker function
-    # sigma_noise = axg.getSigmaFromCN0(signal_power_dB=0, cn0_target_dB=60, signal_bw=axg.GPS_L1CA_CODE_FREQ)
-    # signal = axg.UpsampleCode(signal_prn, 10e6)
-    # replicas = axg.GenerateDelayedReplicas(signal, correlator_delays)
-    # all_results = worker(signal, replicas, 60, sigma_noise, 10e6, 8, axg.EAL_MULTIPLIERS_8BIT_SIGNED)
-
-    # with open('results.pkl', 'wb') as handle:
-    #     pickle.dump(all_results, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-    # # "mul8s_1L12" : eal.mul8s_1L12.calc
-    # print("Done")
+    # test_worker()
     
-
-    # plotCorrelation({'AxC': (all_results['signal_axc_corr_mul8s_1L12'], all_results['signal_axc_lags_mul8s_1L12'])}, 10e6, axg.GPS_L1CA_CODE_FREQ, f"PRN G{prn:02d}, GPS L1 C/A")
-    # plt.savefig('test.png')
-
+    # ==================================================================================================================
     # Parallel simulation processing
-    # sf_list = [10] * GPS_L1CA_CODE_FREQ
-    # cn0_list = [60]
-    # bits_list = [8, 16]
-    # nb_run = 1 # Number Monte Carlo run per subset of parameter
-    # signal_bw = GPS_L1CA_CODE_FREQ # Bandwidth of the signal for CN0 to SNR computation
-    # # Select custom multipliers
-    # custom_multipliers = {}
-    # for name, module in eal.multipliers['8x8_signed'].items():
-    #     custom_multipliers[name] = getattr(module, 'calc')
-    # for name, module in eal.multipliers['16x16_signed'].items():
-    #     custom_multipliers[name] = getattr(module, 'calc')
+    # Simulation parameters
+    sf_list = np.array([2, 4]) * axg.GPS_L1CA_CODE_FREQ
+    cn0_list = range(30, 60, 5)
+    bits_list = [8, 16]
+    nb_run = 10 # Number Monte Carlo run per subset of parameter
+
+    # Signal parameters
+    prn = 1
+    signal_prn = axg.GenerateGPSGoldCode(prn=prn)
+    correlator_delays = range(-200, 201, 1) # in deca chip, chip * 10 (easier to handle integer range in python)
     
-    # # Multiprocessing
-    # num_processes = 4  # CPU cores
-    # pool = multiprocessing.Pool(processes=num_processes)
+    # Multiprocessing
+    num_processes = 4  # CPU cores
+    pool = multiprocessing.Pool(processes=num_processes)
 
-    # # Simulations
-    # args = []
-    # for sf in sf_list:
-    #     for bits in bits_list:
-    #         _custom_mult = {k: v for k, v in custom_multipliers.items() if k.startswith(f'{bits}')}
-    #         for cn0 in cn0_list:
-    #             for _ in nb_run:
-    #                 sigma_noise = getSigmaFromCN0(signal_power_dB=0, cn0_target_dB=cn0, signal_bw=signal_bw)
-    #                 args.append(sigma_noise, sf, bits, _custom_mult)
+    # Simulations
+    args = []
+    for sf in sf_list:
+        signal = axg.UpsampleCode(signal_prn, sf)
+        # Generate the replicas
+        replicas = axg.GenerateDelayedReplicas(signal, correlator_delays)
 
-    # results = pool.starmap(worker, args)
+        for bits in bits_list:
+            # Select approximate multipliers
+            if bits == 8:
+                axc_mults = axg.EAL_MULTIPLIERS_8BIT_SIGNED
+            elif bits == 12:
+                axc_mults = axg.EAL_MULTIPLIERS_12BIT_SIGNED
+            elif bits == 16:
+                axc_mults = axg.EAL_MULTIPLIERS_16BIT_SIGNED
+            else:
+                raise ValueError("Invalid quantization provided.")
+            
+            for cn0 in cn0_list:
+                for run in range(nb_run):
+                    args.append((run, prn, signal, replicas, cn0, sf, bits, axc_mults))
 
-    # pool.close()
-    # pool.join()
+    # Launch processings
+    tic = time.time()
+    all_results = pool.starmap(worker, args)
+    pool.close()
+    pool.join()
+    toc = time.time()
+    print(f"Elapsed time {toc - tic}")
+
+    # Save results
+    with open('all_results.pkl', 'wb') as handle:
+        pickle.dump(all_results, handle, protocol=pickle.HIGHEST_PROTOCOL)
     
     print("Done")

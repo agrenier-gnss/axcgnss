@@ -162,6 +162,27 @@ def getSigmaFromCN0(signal_power_dB, cn0_target_dB, signal_bw):
 
     return sigma
 
+# -------------------------------------------------------------------------------------------------
+
+def getPostCorrelationSNR(correlation, samplingFrequency):
+
+    samplesPerChip = round(samplingFrequency / GPS_L1CA_CODE_FREQ)
+
+    # Get the max peak
+    peak = np.max(correlation)**2
+    maxPeakIdx = np.argmax(np.abs(correlation))
+
+    # Get the mean outside the peak
+    mask = np.ones(len(correlation), dtype=bool)
+    mask[:maxPeakIdx-2*samplesPerChip] = False
+    mask[maxPeakIdx+2*samplesPerChip:] = False
+    noise = np.mean(np.abs(correlation[mask])**2)
+
+    # Compute SNR
+    snr = getPowerdB((peak - noise) / noise)
+
+    return snr
+
 
 #==================================================================================================
 # AXC FUNCTIONS 
