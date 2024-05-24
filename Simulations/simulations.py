@@ -3,6 +3,9 @@ import matplotlib.pyplot as plt
 import pickle
 import multiprocessing
 import time
+import tqdm 
+import os
+import shutil
 
 import axcgnss as axg
 
@@ -57,7 +60,7 @@ def worker(run, prn, signal, replicas, cn0_target_dB, sampling_frequency, quanti
 
 def test_worker():
 
-    sigma_noise = axg.getSigmaFromCN0(signal_power_dB=0, cn0_target_dB=60, signal_bw=axg.GPS_L1CA_CODE_FREQ)
+    sigma_noise = axg.getSigmaFromCN0(signal_power_dB=0, cn0_target_dB=60, signal_bw=axg.GPS_L1CA_CODE_SIZE_BITS)
     signal = axg.UpsampleCode(signal_prn, 10e6)
     replicas = axg.GenerateDelayedReplicas(signal, correlator_delays)
     all_results = worker(signal, replicas, 60, sigma_noise, 10e6, 8, axg.EAL_MULTIPLIERS_8BIT_SIGNED)
@@ -94,7 +97,8 @@ if __name__ == "__main__":
     sf_list = np.array([2, 4]) * axg.GPS_L1CA_CODE_FREQ
     cn0_list = range(30, 60, 5)
     bits_list = [8, 16]
-    nb_run = 10 # Number Monte Carlo run per subset of parameter
+    nb_run = 50 # Number Monte Carlo run per subset of parameter
+    output_folder = '/results/'
 
     # Signal parameters
     prn = 1
@@ -102,12 +106,11 @@ if __name__ == "__main__":
     correlator_delays = range(-200, 201, 1) # in deca chip, chip * 10 (easier to handle integer range in python)
     
     # Multiprocessing
-    num_processes = 4  # CPU cores
-    pool = multiprocessing.Pool(processes=num_processes)
+    num_processes = 8  # CPU cores
 
     # Simulations
     args = []
-    for sf in sf_list:
+    for sf in tqdm.tqdm(sf_list):
         signal = axg.UpsampleCode(signal_prn, sf)
         # Generate the replicas
         replicas = axg.GenerateDelayedReplicas(signal, correlator_delays)
@@ -127,16 +130,20 @@ if __name__ == "__main__":
                 for run in range(nb_run):
                     args.append((run, prn, signal, replicas, cn0, sf, bits, axc_mults))
 
-    # Launch processings
-    tic = time.time()
-    all_results = pool.starmap(worker, args)
-    pool.close()
-    pool.join()
-    toc = time.time()
-    print(f"Elapsed time {toc - tic}")
+            # Launch processings
+            pool = multiprocessing.Pool(processes=num_processes)
+            tic = time.time()
+            all_results = pool.starmap(worker, args)
+            pool.close()
+            pool.join()
+            toc = time.time()
+            print(f"Elapsed time {toc - tic}")
 
-    # Save results
-    with open('all_results.pkl', 'wb') as handle:
-        pickle.dump(all_results, handle, protocol=pickle.HIGHEST_PROTOCOL)
-    
+            # Save results
+            if os.path.exists(f"{output_folder}"):
+                shutil.rmtree(f"{output_folder}")
+            os.mkdir(f"{output_folder}")
+            with open(f'{output_folder}{int(sf/1e3)}KHz_{bits}bits.pkl', 'wb') as handle:
+                pickle.dump(all_results, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        
     print("Done")
