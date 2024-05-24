@@ -52,7 +52,7 @@ def worker(run, prn, signal, replicas, cn0_target_dB, sampling_frequency, quanti
                 axc_corr=0
             )
         
-    print(f"Run done ({sampling_frequency:>12.1f} Hz, {quantization_bits:>2d} bits, {cn0_target_dB:>2d} dB, run {run:>4d})")
+    #print(f"Run done ({sampling_frequency:>12.1f} Hz, {quantization_bits:>2d} bits, {cn0_target_dB:>2d} dB, run {run:>4d})")
 
     return results
 
@@ -95,10 +95,14 @@ if __name__ == "__main__":
     # Parallel simulation processing
     # Simulation parameters
     sf_list = np.array([2, 4]) * axg.GPS_L1CA_CODE_FREQ
-    cn0_list = range(30, 60, 5)
+    cn0_list = range(30, 40, 5)
     bits_list = [8, 16]
-    nb_run = 50 # Number Monte Carlo run per subset of parameter
-    output_folder = '/results/'
+    nb_run = 10 # Number Monte Carlo run per subset of parameter
+    
+    output_folder = './Simulations/results/'
+    if os.path.exists(f"{output_folder}"):
+        shutil.rmtree(f"{output_folder}")
+    os.mkdir(f"{output_folder}")
 
     # Signal parameters
     prn = 1
@@ -109,13 +113,14 @@ if __name__ == "__main__":
     num_processes = 8  # CPU cores
 
     # Simulations
-    args = []
-    for sf in tqdm.tqdm(sf_list):
+    for sf in sf_list:
         signal = axg.UpsampleCode(signal_prn, sf)
         # Generate the replicas
         replicas = axg.GenerateDelayedReplicas(signal, correlator_delays)
 
         for bits in bits_list:
+            args = []
+
             # Select approximate multipliers
             if bits == 8:
                 axc_mults = axg.EAL_MULTIPLIERS_8BIT_SIGNED
@@ -137,13 +142,11 @@ if __name__ == "__main__":
             pool.close()
             pool.join()
             toc = time.time()
-            print(f"Elapsed time {toc - tic}")
 
             # Save results
-            if os.path.exists(f"{output_folder}"):
-                shutil.rmtree(f"{output_folder}")
-            os.mkdir(f"{output_folder}")
             with open(f'{output_folder}{int(sf/1e3)}KHz_{bits}bits.pkl', 'wb') as handle:
                 pickle.dump(all_results, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+            print(f"Run done ({sf:>12.1f} Hz, {bits:>2d} bits), elapsed time {toc - tic:>6.3f}")
         
     print("Done")
