@@ -95,9 +95,9 @@ if __name__ == "__main__":
     # Parallel simulation processing
     # Simulation parameters
     sf_list = np.array([2, 4]) * axg.GPS_L1CA_CODE_FREQ
-    cn0_list = range(30, 40, 5)
+    cn0_list = range(30, 65, 5)
     bits_list = [8, 16]
-    nb_run = 10 # Number Monte Carlo run per subset of parameter
+    nb_run = 50 # Number Monte Carlo run per subset of parameter
     
     output_folder = './Simulations/results/'
     if os.path.exists(f"{output_folder}"):
