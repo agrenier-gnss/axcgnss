@@ -141,21 +141,33 @@ def GenerateDelayedReplicas(signal, correlator_delays):
 
 # -------------------------------------------------------------------------------------------------
 
-def addWhiteNoise(signal, sigma):
+def addWhiteNoise(signal, sigma, seed=None):
+
+    if seed:
+        np.random.seed(seed)
 
     noise = np.random.normal(0, scale=sigma, size=len(signal))
     
     #signal_out = signal + noise * sigma
-    signal_out = signal + (noise - np.mean(noise))/np.std(noise)*sigma # From Simona's file
     #signal_out = signal + noise
+    signal_out = signal + (noise - np.mean(noise))/np.std(noise)*sigma # From Simona's file
+    # AG: I believe this normalization is perform to have a noise power that is normalised (sigma_noise = 1) w.r.t to 
+    #     the signal power. A explanation of this is given in the following reference 
+    #     (GNSS Software Receivers, Kai Borre, 2023, p.28 (footnote))
+    #     This is why we can assume 30 dB of gain during correlation, which explain the 30 dB in getSigmaFromCN0.
 
     return signal_out
 
 # -------------------------------------------------------------------------------------------------
 
 def getSigmaFromCN0(signal_power_dB, cn0_target_dB, signal_bw):
+
+    # Based on (kai borre, 2023, p.28), and assuming noise power is normalised. 
+    # correlation_gain = int(getPowerdB(GPS_L1CA_CODE_SIZE_BITS**2) - getPowerdB(GPS_L1CA_CODE_SIZE_BITS))
+
+    correlation_gain = getPowerdB(signal_bw)
     
-    snr_target_dB = cn0_target_dB - getPowerdB(signal_bw) # TODO Should we add the bandwidth of the sampling frequency as well? 
+    snr_target_dB = cn0_target_dB - correlation_gain
 
     noise_power = getPowerLinear(signal_power_dB) / getPowerLinear(snr_target_dB)
     sigma = np.sqrt(noise_power)

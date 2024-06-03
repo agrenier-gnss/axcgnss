@@ -5,7 +5,9 @@ import scipy as sp
 import sys
 sys.path.append("/mnt/d/Projects/Navigation/MyCode/sydr")
 from sydr.signal.gnsssignal import GenerateGPSGoldCode
-from sydr.utils.constants import GPS_L1CA_CODE_FREQ
+
+GPS_L1CA_CODE_SIZE_BITS = 1023     # Number bit per C/A code    
+GPS_L1CA_CODE_FREQ = 1.023e6       # [Hz] C/A code frequency
 
 import axcoperations as axc
 
@@ -35,15 +37,22 @@ def addWhiteNoise(signal, sigma):
     
     #signal_out = signal + noise * sigma
     signal_out = signal + (noise - np.mean(noise))/np.std(noise)*sigma # From Simona's file
+    # AG: I believe this normalization is perform to have a noise power that is normalised (sigma_noise = 1) w.r.t to 
+    #     the signal power. A explanation of this is given in the following reference 
+    #     (GNSS Software Receivers, Kai Borre, 2023, p.28 (footnote))
+    #     This is why we can assume 30 dB of gain during correlation, which explain the 30 dB in getSigmaFromCN0.
     #signal_out = signal + noise
 
     return signal_out
 
 # =============================================================================
 
-def getSigmaFromCN0(signal_power_dB, cn0_target_dB, signal_bw):
+def getSigmaFromCN0(signal_power_dB, cn0_target_dB):
+
+    # Based on (kai borre, 2023, p.28)
+    correlation_gain = int(getPowerdB(GPS_L1CA_CODE_SIZE_BITS**2) - getPowerdB(GPS_L1CA_CODE_SIZE_BITS))
     
-    snr_target_dB = cn0_target_dB - getPowerdB(signal_bw) # TODO Should we add the bandwidth of the sampling frequency as well? 
+    snr_target_dB = cn0_target_dB - correlation_gain
 
     noise_power = getPowerLinear(signal_power_dB) / getPowerLinear(snr_target_dB)
     sigma = np.sqrt(noise_power)
