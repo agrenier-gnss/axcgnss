@@ -8,6 +8,7 @@
 import numpy as np
 import scipy as sp
 import matplotlib.pyplot as plt
+import pandas as pd
 
 import evoapproxlib as eal
 import ca
@@ -325,3 +326,115 @@ def quantize(signal, n_bits):
 
     return signal_quantized, scale_factor
 
+#==================================================================================================
+# ANALYSIS FUNCTIONS
+
+def select_data(df, sampling_frequency=None, quantization=None, cn0=None):
+
+    _df = df.copy()
+    if sampling_frequency:
+        _df = _df[_df['sampling_frequency'].eq(sampling_frequency)]
+    
+    if quantization: 
+        _df = _df[_df['quantization'].eq(quantization)]
+
+    if cn0: 
+        _df = _df[_df['cn0_target_dB'].eq(cn0)]
+    
+    _df = _df.dropna(axis=1, how='all')
+
+    return _df
+
+def plotSimulation(df, axc_mult):
+
+    for index, row in df.iterrows():
+        corr_lags = range(-row['delay_range'], row['delay_range']+1, row['delay_step'])
+        plt.plot(corr_lags, row[f"axc_corr_{axc_mult}"])
+
+    return 
+
+
+def plotCoherentCorrelation(df, axc_mult, num_integration):
+
+    coherent_integration = np.zeros(401)
+    idx = 0
+    for index, row in df.iterrows():
+        corr_lags = range(-row['delay_range'], row['delay_range']+1, row['delay_step'])
+        plt.plot(corr_lags, row[f"axc_corr_{axc_mult}"])
+        coherent_integration += row[f"axc_corr_{axc_mult}"]
+        lags = corr_lags
+        idx += 1
+        if idx == num_integration:
+            break
+    plt.plot(lags, np.abs(coherent_integration))
+
+    return 
+
+def plotPostCorrelationSNRPerFrequency(df_results, axc_mult, cn0_range, frequencies, bits):
+
+    mean_snr = []
+    plt.figure()
+    plt.title(f"{axc_mult}")
+    for freq in frequencies:
+        mean_snr = []
+        for cn0 in cn0_range:
+            df = select_data(df_results, int(freq), bits, cn0)
+            snr = []
+            for index, row in df.iterrows():
+                corr = np.abs(row[f"axc_corr_{axc_mult}"])
+                snr.append(getPostCorrelationSNR(corr, row['sampling_frequency'], np.argmax(corr)))
+            snr = np.array(snr)
+            mean_snr.append(np.nanmean(snr))
+            # print(f"CN0: {cn0}, {np.nanmean(snr):.5f}")
+        plt.plot(cn0_range, mean_snr, label=f'{freq}')
+    plt.legend()
+    return
+
+def plotPostCorrelationSNRPerAxC(df_results, cn0_range, sampling_frequency, bits):
+
+    if bits == 8:
+        axc_mult_list = list(EAL_MULTIPLIERS_8BIT_SIGNED.keys())
+    if bits == 16:
+        axc_mult_list = list(EAL_MULTIPLIERS_16BIT_SIGNED.keys())
+
+    snr = {'axc': axc_mult_list}
+    for cn0 in cn0_range:
+        snr_mean = []
+        for axc_mult in axc_mult_list:
+            df = select_data(df_results, sampling_frequency, bits, cn0)
+            _snr = []
+            for index, row in df.iterrows():
+                corr = row[f'axc_corr_{axc_mult}']
+                _snr.append(getPostCorrelationSNR(corr, sampling_frequency, 200))
+            _snr = np.array(_snr)
+            snr_mean.append(np.nanmean(_snr))
+            snr[f'{cn0}'] = snr_mean
+    snr = pd.DataFrame(snr).T
+    snr = snr.rename(columns=snr.iloc[0]).iloc[1:]
+    snr.plot(grid=True, legend=False)
+    plt.legend(bbox_to_anchor=(1.05, 1.0), loc='upper left')
+    
+    return
+
+def getPostCorrelationSNR(correlation, samplingFrequency, idxPeak):
+    samplesPerChip = round(samplingFrequency / GPS_L1CA_CODE_FREQ)
+
+    correlation = np.abs(correlation)
+
+    # Get the max peak
+    peak = correlation[idxPeak]**2
+
+    # Get the mean outside the peak
+    mask = np.ones(len(correlation), dtype=bool)
+    mask[:idxPeak-2*samplesPerChip] = False
+    mask[idxPeak+2*samplesPerChip:] = False
+    noise = np.mean(np.abs(correlation[~mask])**2)
+
+    # Compute SNR (from Simona) - Problem when noise > peak, lead to NaN values
+    # snr = (peak - noise) / noise
+    # snr = axg.getPowerdB(snr)
+    
+    # Compute SNR - does not remove the noise part in the peak, but at least can show negative SNR
+    snr = getPowerdB(peak) - getPowerdB(noise)
+
+    return snr
