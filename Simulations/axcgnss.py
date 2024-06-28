@@ -9,6 +9,7 @@ import numpy as np
 import scipy as sp
 import matplotlib.pyplot as plt
 import pandas as pd
+import re 
 
 import evoapproxlib as eal
 import ca
@@ -345,6 +346,8 @@ def select_data(df, sampling_frequency=None, quantization=None, cn0=None):
 
     return _df
 
+# -------------------------------------------------------------------------------------------------
+
 def plotSimulation(df, axc_mult):
 
     for index, row in df.iterrows():
@@ -353,6 +356,7 @@ def plotSimulation(df, axc_mult):
 
     return 
 
+# -------------------------------------------------------------------------------------------------
 
 def plotCoherentCorrelation(df, axc_mult, num_integration):
 
@@ -370,42 +374,83 @@ def plotCoherentCorrelation(df, axc_mult, num_integration):
 
     return 
 
-def plotPostCorrelationSNRPerFrequency(df_results, axc_mult, cn0_range, frequencies, bits):
+# -------------------------------------------------------------------------------------------------
 
-    mean_snr = []
-    plt.figure()
-    plt.title(f"{axc_mult}")
-    for freq in frequencies:
-        mean_snr = []
+def plotPostCorrelationSNRPerFrequency(df_results, axc_mult_list, cn0_range, frequencies, bits, errors=None):
+
+    idx_peak = 200
+    
+    plt.figure(figsize=(6,4))
+    #plt.title(f"{axc_mult}")
+    
+    for axc_mult in axc_mult_list:
+        snr_mean = []
+        snr_std = []
         for cn0 in cn0_range:
-            df = select_data(df_results, int(freq), bits, cn0)
             snr = []
-            for index, row in df.iterrows():
-                corr = np.abs(row[f"axc_corr_{axc_mult}"])
-                snr.append(getPostCorrelationSNR(corr, row['sampling_frequency'], np.argmax(corr)))
+            for freq in frequencies:
+                df = select_data(df_results, int(freq), bits, cn0)
+                for index, row in df.iterrows():
+                    corr = np.abs(row[f"axc_corr_{axc_mult}"])
+                    corr = removeCorrelationMean(corr, idx_peak, freq)
+                    #idx_peak = np.argmax(corr)
+                    snr.append(getPostCorrelationSNR(corr, row['sampling_frequency'], idx_peak))
             snr = np.array(snr)
-            mean_snr.append(np.nanmean(snr))
-            # print(f"CN0: {cn0}, {np.nanmean(snr):.5f}")
-        plt.plot(cn0_range, mean_snr, label=f'{freq}')
-    plt.legend()
-    return
+            snr_mean.append(np.nanmean(snr))
+            snr_std.append(np.nanstd(snr))
+        snr_mean = np.array(snr_mean)
+        snr_std = np.array(snr_std)
+        
+        label = re.sub('mul\d+s_', '', axc_mult)
+        
+        if label == '1KV6' or label == 'HG4':
+            label = 'Exact'
+        
+        if errors == 'bar':
+            plt.errorbar(cn0_range, snr_mean, snr_std, label=label, marker='o', capsize=3)
+        elif errors == 'between':
+            plt.plot(cn0_range, snr_mean, marker='o', label=label)
+            plt.fill_between(cn0_range, snr_mean - snr_std, snr_mean + snr_std, alpha=0.2)
+        else:
+            plt.plot(cn0_range, snr_mean, marker='o', label=label)
+    plt.grid()
+    plt.xlabel("C/N0 [dB-Hz]")
+    plt.ylabel("Post-correlation SNR [dB]")
+    plt.xlim(cn0_range[0], cn0_range[-1])
+    plt.legend(fontsize='small')
+    return 
+
+# -------------------------------------------------------------------------------------------------
 
 def plotPostCorrelationSNRPerAxC(df_results, cn0_range, sampling_frequency, bits):
 
+    idx_peak = 200
+
     if bits == 8:
         axc_mult_list = list(EAL_MULTIPLIERS_8BIT_SIGNED.keys())
-    if bits == 16:
+    elif bits == 12:
+        axc_mult_list = list(EAL_MULTIPLIERS_12BIT_SIGNED.keys())    
+    elif bits == 16:
         axc_mult_list = list(EAL_MULTIPLIERS_16BIT_SIGNED.keys())
 
     snr = {'axc': axc_mult_list}
     for cn0 in cn0_range:
         snr_mean = []
+        df = select_data(df_results, sampling_frequency, bits, cn0)
+        
         for axc_mult in axc_mult_list:
-            df = select_data(df_results, sampling_frequency, bits, cn0)
             _snr = []
             for index, row in df.iterrows():
                 corr = row[f'axc_corr_{axc_mult}']
-                _snr.append(getPostCorrelationSNR(corr, sampling_frequency, 200))
+                corr = removeCorrelationMean(corr, idx_peak, sampling_frequency)
+                __snr = getPostCorrelationSNR(corr, sampling_frequency, idx_peak)
+
+                # Get SNR exact
+                corr = row[f'axc_corr_{axc_mult_list[0]}']
+                corr = removeCorrelationMean(corr, idx_peak, sampling_frequency)
+                snr_exact = getPostCorrelationSNR(corr, sampling_frequency, idx_peak)
+
+                _snr.append( __snr - snr_exact)
             _snr = np.array(_snr)
             snr_mean.append(np.nanmean(_snr))
             snr[f'{cn0}'] = snr_mean
@@ -415,6 +460,8 @@ def plotPostCorrelationSNRPerAxC(df_results, cn0_range, sampling_frequency, bits
     plt.legend(bbox_to_anchor=(1.05, 1.0), loc='upper left')
     
     return
+
+# -------------------------------------------------------------------------------------------------
 
 def getPostCorrelationSNR(correlation, samplingFrequency, idxPeak):
     samplesPerChip = round(samplingFrequency / GPS_L1CA_CODE_FREQ)
@@ -433,8 +480,46 @@ def getPostCorrelationSNR(correlation, samplingFrequency, idxPeak):
     # Compute SNR (from Simona) - Problem when noise > peak, lead to NaN values
     # snr = (peak - noise) / noise
     # snr = axg.getPowerdB(snr)
+    if noise > peak:
+        snr = 0
+    else:
+        snr = (peak - noise) / noise
+        snr = getPowerdB(snr)
     
     # Compute SNR - does not remove the noise part in the peak, but at least can show negative SNR
-    snr = getPowerdB(peak) - getPowerdB(noise)
+    # if noise > peak:
+    #     snr = 0
+    # else:
+    #     snr = getPowerdB(peak) - getPowerdB(noise)
 
     return snr
+
+# -------------------------------------------------------------------------------------------------
+
+def getCorrelationSeed(prn, sampling_frequency, cn0, correlator_delays, seed):
+
+    signal_prn = GenerateGPSGoldCode(prn=prn)
+    signal = UpsampleCode(signal_prn, sampling_frequency)
+    # Generate the replicas
+    replicas = GenerateDelayedReplicas(signal, correlator_delays)
+    # Get noise from target CN0
+    sigma_noise = getSigmaFromCN0(signal_power_dB=0, cn0_target_dB=cn0, signal_bw=int(sampling_frequency*2))
+    # Noisy signal, create a pseudo-random seed
+    signal_noisy = addWhiteNoise(signal, sigma=sigma_noise, seed=seed)
+    
+    corr, lags = PartialCorrelation(signal_noisy, replicas)
+
+    return corr, lags
+
+# -------------------------------------------------------------------------------------------------
+
+def removeCorrelationMean(corr, idx_peak, sampling_frequency):
+    
+    samplesPerChip = round(sampling_frequency / GPS_L1CA_CODE_FREQ)
+    mask = np.ones(len(corr), dtype=bool)
+    mask[:idx_peak-2*samplesPerChip] = False
+    mask[idx_peak+2*samplesPerChip:] = False
+    mean = np.mean(corr[~mask])
+    corr = np.abs(corr - mean)
+
+    return corr

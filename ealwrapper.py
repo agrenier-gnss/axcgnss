@@ -2,6 +2,7 @@ import pandas as pd
 import evoapproxlib as eal
 import matplotlib.pyplot as plt
 from adjustText import adjust_text
+import re
 
 # =============================================================================
 
@@ -26,7 +27,7 @@ def getMultipliersEAL(name):
 
 def plotKPI(df, kpi_x, kpi_y, log_x=False, log_y=False):
 
-    fig, ax = plt.subplots(figsize=(8, 6), layout="constrained")
+    fig, ax = plt.subplots(figsize=(4, 4), layout="constrained")
     ax.scatter(df['MAE_PERCENT'], df['PDK45_PWR'])
     ax.set_axisbelow(True)
 
@@ -36,14 +37,15 @@ def plotKPI(df, kpi_x, kpi_y, log_x=False, log_y=False):
         ax.set_yscale('log')
     
     # Add module names
-    text = [ax.annotate(txt, (df['MAE_PERCENT'][i], df['PDK45_PWR'][i])) for i, txt in enumerate(df['NAME'])]
+    text = [ax.annotate(re.sub('mul\d+s_', '', txt), (df['MAE_PERCENT'][i], df['PDK45_PWR'][i])) for i, txt in enumerate(df['NAME'])]
 
-    # adjust_text(text)
+    #adjust_text(text)
 
     _ = plt.xticks(rotation=45)
     plt.grid()
     plt.xlabel(kpi_x)
     plt.ylabel(kpi_y)
+    plt.tight_layout()
     
     return fig, ax
 
